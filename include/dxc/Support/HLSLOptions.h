@@ -154,6 +154,8 @@ public:
   bool EnableStrictMode = false;     // OPT_Ges
   bool EnableDX9CompatMode = false;     // OPT_Gec
   bool EnableFXCCompatMode = false;     // internal flag
+  bool ImplicitNarrowing = true; // // fno-implicit-narrowing
+  bool ImplicitStructConversion = true; // fno-implicit-struct-conversion
   unsigned long HLSLVersion = 0; // OPT_hlsl_version (2015-2018)
   bool Enable16BitTypes = false; // OPT_enable_16bit_types
   bool OptDump = false; // OPT_ODump - dump optimizer commands

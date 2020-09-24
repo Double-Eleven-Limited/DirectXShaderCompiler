@@ -272,6 +272,15 @@ def validator_version : Separate<["-", "/"], "validator-version">, Group<hlslcom
 def print_after_all : Flag<["-", "/"], "print-after-all">, Group<hlslcomp_Group>, Flags<[CoreOption, HelpHidden]>,
   HelpText<"Print LLVM IR after each pass.">;
 
+// d11.matts - implicit conversion flags
+def fimplicit_narrowing : Flag<["-"], "fimplicit-narrowing">, Group<hlslcomp_Group>;
+def fno_implicit_narrowing : Flag<["-"], "fno-implicit-narrowing">, Group<hlslcomp_Group>,
+  Flags<[CoreOption]>, HelpText<"Do not allow implicit narrowing of vector types">;
+def fimplicit_struct_conversion : Flag<["-"], "fimplicit-struct-conversion">, Group<hlslcomp_Group>;
+def fno_implicit_struct_conversion : Flag<["-"], "fno-implicit-struct-conversion">, Group<hlslcomp_Group>,
+  Flags<[CoreOption]>, HelpText<"Do not allow implicit conversions between equivalent struct types">;
+// d11.matts - end
+
 // Used with API only
 def skip_serialization : Flag<["-", "/"], "skip-serialization">, Group<hlslcore_Group>, Flags<[CoreOption, HelpHidden]>,
   HelpText<"Return a module interface instead of serialized output">;

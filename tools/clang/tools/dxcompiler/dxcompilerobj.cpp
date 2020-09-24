@@ -1093,6 +1093,9 @@ public:
     compiler.getLangOpts().HLSLVersion = (unsigned) Opts.HLSLVersion;
     compiler.getLangOpts().EnableDX9CompatMode = Opts.EnableDX9CompatMode;
     compiler.getLangOpts().EnableFXCCompatMode = Opts.EnableFXCCompatMode;
+    compiler.getLangOpts().ImplicitNarrowing = Opts.ImplicitNarrowing;
+    compiler.getLangOpts().ImplicitStructConversion =
+        Opts.ImplicitStructConversion;
 
     compiler.getLangOpts().UseMinPrecision = !Opts.Enable16BitTypes;
 

@@ -642,6 +642,11 @@ int ReadDxcOpts(const OptTable *optionTable, unsigned flagsToInclude,
   opts.ResMayAlias = Args.hasFlag(OPT_res_may_alias, OPT_INVALID, false);
   opts.ResMayAlias = Args.hasFlag(OPT_res_may_alias_, OPT_INVALID, opts.ResMayAlias);
 
+  // d11.matts - implicit conversion stuff
+  opts.ImplicitNarrowing = Args.hasFlag(OPT_fimplicit_narrowing, OPT_fno_implicit_narrowing, true);
+  opts.ImplicitStructConversion = Args.hasFlag(OPT_fimplicit_struct_conversion, OPT_fno_implicit_struct_conversion, true);
+  // d11.matts
+
   if (opts.DefaultColMajor && opts.DefaultRowMajor) {
     errors << "Cannot specify /Zpr and /Zpc together, use /? to get usage information";
     return 1;

@@ -8467,6 +8467,11 @@ bool HLSLExternalSource::CanConvert(
       }
     }
 
+    // d11.matts
+    if (!explicitConversion && !getSema()->getLangOpts().ImplicitStructConversion)
+      return false;
+    // / d11.matts
+
     FlattenedTypeIterator::ComparisonResult result =
       FlattenedTypeIterator::CompareTypes(*this, loc, loc, target, source);
     if (!result.CanConvertElements) {
@@ -8503,6 +8508,12 @@ bool HLSLExternalSource::CanConvert(
   // Convert scalar/vector/matrix dimensions
   if (!ConvertDimensions(TargetInfo, SourceInfo, Second, Remarks))
     return false;
+
+  // d11.matts - no implicit truncation
+  if (Second == ICK_HLSLVector_Truncation && !explicitConversion &&
+      !getSema()->getLangOpts().ImplicitNarrowing)
+    return false;
+  // / d11.matts
 
   // Convert component type
   if (!ConvertComponent(TargetInfo, SourceInfo, ComponentConversion, Remarks))
@@ -9643,6 +9654,11 @@ bool HLSLExternalSource::ValidateCast(
     }
     return false;
   }
+
+  // d11.matts
+  if (!explicitConversion && (remarks & TYPE_CONVERSION_ELT_TRUNCATION) != 0)
+    return false;
+  // d11.matts
 
   if (!suppressWarnings)
   {

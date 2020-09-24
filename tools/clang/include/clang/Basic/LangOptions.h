@@ -158,6 +158,8 @@ public:
   bool UseMinPrecision; // use min precision, not native precision.
   bool EnableDX9CompatMode;
   bool EnableFXCCompatMode;
+  bool ImplicitNarrowing;
+  bool ImplicitStructConversion;
   // HLSL Change Ends
 
   bool SPIRV = false;  // SPIRV Change
