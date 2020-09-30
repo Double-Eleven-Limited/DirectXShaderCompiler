@@ -9656,7 +9656,8 @@ bool HLSLExternalSource::ValidateCast(
   }
 
   // d11.matts
-  if (!explicitConversion && (remarks & TYPE_CONVERSION_ELT_TRUNCATION) != 0)
+  if (!explicitConversion && (remarks & TYPE_CONVERSION_ELT_TRUNCATION) != 0 && 
+      !m_sema->getLangOpts().ImplicitNarrowing)
     return false;
   // d11.matts
 
