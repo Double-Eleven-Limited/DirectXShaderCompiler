@@ -156,6 +156,8 @@ public:
   bool EnableFXCCompatMode = false;     // internal flag
   bool ImplicitNarrowing = true; // // fno-implicit-narrowing
   bool ImplicitStructConversion = true; // fno-implicit-struct-conversion
+  bool VectorSplatCtors = false; // fvector-splat-ctors
+  bool IgnorePointers = false; // fignore-pointers
   unsigned long HLSLVersion = 0; // OPT_hlsl_version (2015-2018)
   bool Enable16BitTypes = false; // OPT_enable_16bit_types
   bool OptDump = false; // OPT_ODump - dump optimizer commands

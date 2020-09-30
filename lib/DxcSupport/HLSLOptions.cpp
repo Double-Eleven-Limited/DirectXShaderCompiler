@@ -645,6 +645,8 @@ int ReadDxcOpts(const OptTable *optionTable, unsigned flagsToInclude,
   // d11.matts - implicit conversion stuff
   opts.ImplicitNarrowing = Args.hasFlag(OPT_fimplicit_narrowing, OPT_fno_implicit_narrowing, true);
   opts.ImplicitStructConversion = Args.hasFlag(OPT_fimplicit_struct_conversion, OPT_fno_implicit_struct_conversion, true);
+  opts.VectorSplatCtors = Args.hasFlag(OPT_fvector_splat_ctors, OPT_fno_vector_splat_ctors, false);
+  opts.IgnorePointers = Args.hasFlag(OPT_fignore_pointers, OPT_INVALID, false);
   // d11.matts
 
   if (opts.DefaultColMajor && opts.DefaultRowMajor) {

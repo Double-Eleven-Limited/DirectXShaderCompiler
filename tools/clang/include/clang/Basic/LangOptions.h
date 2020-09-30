@@ -160,6 +160,8 @@ public:
   bool EnableFXCCompatMode;
   bool ImplicitNarrowing;
   bool ImplicitStructConversion;
+  bool VectorSplatCtors;
+  bool IgnorePointers;
   // HLSL Change Ends
 
   bool SPIRV = false;  // SPIRV Change

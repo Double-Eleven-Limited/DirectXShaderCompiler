@@ -5765,7 +5765,7 @@ void Parser::ParseDeclaratorInternal(Declarator &D,
       }
 
       // HLSL Change Starts - No pointer support in HLSL.
-      if (getLangOpts().HLSL) {
+      if (getLangOpts().HLSL && !getLangOpts().IgnorePointers) {
         Diag(Tok, diag::err_hlsl_unsupported_pointer);
         D.SetIdentifier(0, Tok.getLocation());
         D.setInvalidType();
@@ -5796,7 +5796,13 @@ void Parser::ParseDeclaratorInternal(Declarator &D,
 
   // HLSL Change Starts - HLSL doesn't support pointers, references or blocks
   if (getLangOpts().HLSL && isPtrOperatorToken(Kind, getLangOpts(), D.getContext())) {
-    Diag(Tok, diag::err_hlsl_unsupported_pointer);
+    if (!getLangOpts().IgnorePointers)
+      Diag(Tok, diag::err_hlsl_unsupported_pointer);
+    SourceLocation Loc = ConsumeToken(); // Eat the *, ^, & or &&.
+    D.SetRangeEnd(Loc);
+    if (DirectDeclParser)
+      (this->*DirectDeclParser)(D);
+    return;
   }
   // HLSL Change Ends
 

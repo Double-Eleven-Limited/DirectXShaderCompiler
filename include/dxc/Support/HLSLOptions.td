@@ -279,7 +279,12 @@ def fno_implicit_narrowing : Flag<["-"], "fno-implicit-narrowing">, Group<hlslco
 def fimplicit_struct_conversion : Flag<["-"], "fimplicit-struct-conversion">, Group<hlslcomp_Group>;
 def fno_implicit_struct_conversion : Flag<["-"], "fno-implicit-struct-conversion">, Group<hlslcomp_Group>,
   Flags<[CoreOption]>, HelpText<"Do not allow implicit conversions between equivalent struct types">;
-// d11.matts - end
+def fvector_splat_ctors : Flag<["-"], "fvector-splat-ctors">, Group<hlslcomp_Group>,
+  Flags<[CoreOption]>, HelpText<"Enable float to vector splatting/widening constructors">;
+def fno_vector_splat_ctors : Flag<["-"], "fno-vector-splat-ctors">, Group<hlslcomp_Group>;
+def fignore_pointers : Flag<["-"], "fignore-pointers">, Group<hlslcomp_Group>,
+  Flags<[CoreOption]>, HelpText<"Ignore/flatten pointers">;
+// d11.mattts - end
 
 // Used with API only
 def skip_serialization : Flag<["-", "/"], "skip-serialization">, Group<hlslcore_Group>, Flags<[CoreOption, HelpHidden]>,

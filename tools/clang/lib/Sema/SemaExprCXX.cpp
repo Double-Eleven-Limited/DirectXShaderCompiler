@@ -5619,7 +5619,8 @@ ExprResult Sema::ActOnStartCXXMemberReference(Scope *S, Expr *Base,
   assert(OpKind == tok::arrow || OpKind == tok::period);
   if (getLangOpts().HLSL && OpKind != tok::period) {
     // continue processing as if it was a period accessor
-    Diag(OpLoc, diag::err_hlsl_unsupported_operator);
+    if (!getLangOpts().IgnorePointers)
+      Diag(OpLoc, diag::err_hlsl_unsupported_operator);
     OpKind = tok::period;
   }
   // HLSL Change Ends

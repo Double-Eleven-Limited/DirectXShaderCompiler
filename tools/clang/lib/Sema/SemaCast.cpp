@@ -2133,6 +2133,17 @@ void CastOperation::CheckCXXCStyleCast(bool FunctionalStyle,
       return;
     }
 
+  // d11.matts - VECTOR SPLAT
+  if (Self.getLangOpts().HLSL && Self.getLangOpts().VectorSplatCtors && 
+      hlsl::IsVectorType(&Self, DestType) && 
+      (SrcExpr.get()->getType()->isIntegerType() ||
+       SrcExpr.get()->getType()->isFloatingType())) {
+    Kind = CK_HLSLVectorSplat;
+    //ValueKind = VK_LValue;
+    return;
+  }
+  // d11.matts
+
   // C++ [expr.cast]p5: The conversions performed by
   //   - a const_cast,
   //   - a static_cast,
