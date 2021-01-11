@@ -16,6 +16,8 @@
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/IR/Constants.h"
+#include "dxc/DXIL/DxilConstants.h"
+#include "dxc/DXIL/DxilResourceProperties.h"
 
 namespace llvm {
 class Type;
@@ -35,6 +37,8 @@ class PassRegistry;
 class DebugInfoFinder;
 class DebugLoc;
 class DIGlobalVariable;
+class ConstantInt;
+class SwitchInst;
 
 ModulePass *createDxilLoadMetadataPass();
 void initializeDxilLoadMetadataPass(llvm::PassRegistry&);
@@ -59,9 +63,14 @@ namespace dxilutil {
   bool HasDynamicIndexing(llvm::Value *V);
 
   // Find alloca insertion point, given instruction
-  llvm::Instruction *FindInsertionPt(llvm::Instruction* I); // Considers entire parent function
-  llvm::Instruction *FindInsertionPt(llvm::BasicBlock* BB); // Only considers provided block
-  llvm::Instruction *FindInsertionPt(llvm::Function* F);
+  llvm::Instruction *FindAllocaInsertionPt(llvm::Instruction* I); // Considers entire parent function
+  llvm::Instruction *FindAllocaInsertionPt(llvm::BasicBlock* BB); // Only considers provided block
+  llvm::Instruction *FindAllocaInsertionPt(llvm::Function* F);
+  llvm::Instruction *SkipAllocas(llvm::Instruction *I);
+  // Get first non-alloca insertion point, to avoid inserting non-allocas before alloca
+  llvm::Instruction *FirstNonAllocaInsertionPt(llvm::Instruction* I); // Considers entire parent function
+  llvm::Instruction *FirstNonAllocaInsertionPt(llvm::BasicBlock* BB); // Only considers provided block
+  llvm::Instruction *FirstNonAllocaInsertionPt(llvm::Function* F);
 
   bool IsStaticGlobal(llvm::GlobalVariable *GV);
   bool IsSharedMemoryGlobal(llvm::GlobalVariable *GV);
@@ -108,6 +117,7 @@ namespace dxilutil {
                                       unsigned startOpIdx,
                                       unsigned numOperands);
   bool SimplifyTrivialPHIs(llvm::BasicBlock *BB);
+  llvm::BasicBlock *GetSwitchSuccessorForCond(llvm::SwitchInst *Switch, llvm::ConstantInt *Cond);
   void MigrateDebugValue(llvm::Value *Old, llvm::Value *New);
   void TryScatterDebugValueToVectorElements(llvm::Value *Val);
   std::unique_ptr<llvm::Module> LoadModuleFromBitcode(llvm::StringRef BC,
@@ -120,11 +130,13 @@ namespace dxilutil {
   bool IsIntegerOrFloatingPointType(llvm::Type *Ty);
   // Returns true if type contains HLSL Object type (resource)
   bool ContainsHLSLObjectType(llvm::Type *Ty);
+  std::pair<bool, DxilResourceProperties> GetHLSLResourceProperties(llvm::Type *Ty);
   bool IsHLSLResourceType(llvm::Type *Ty);
   bool IsHLSLObjectType(llvm::Type *Ty);
   bool IsHLSLRayQueryType(llvm::Type *Ty);
   bool IsHLSLResourceDescType(llvm::Type *Ty);
   bool IsResourceSingleComponent(llvm::Type *Ty);
+  uint8_t GetResourceComponentCount(llvm::Type *Ty);
   bool IsSplat(llvm::ConstantDataVector *cdv);
 
   llvm::Type* StripArrayTypes(llvm::Type *Ty, llvm::SmallVectorImpl<unsigned> *OuterToInnerLengths = nullptr);

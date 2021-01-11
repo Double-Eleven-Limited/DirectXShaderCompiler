@@ -115,10 +115,12 @@ public:
               const hlsl::RegisterAssignment *r, const VKBindingAttr *b,
               const VKCounterBindingAttr *cb, bool counter = false,
               bool globalsBuffer = false)
-      : variable(var), srcLoc(loc), reg(r), binding(b), counterBinding(cb),
-        isCounterVar(counter), isGlobalsCBuffer(globalsBuffer) {}
+      : variable(var), declaration(decl), srcLoc(loc), reg(r), binding(b),
+        counterBinding(cb), isCounterVar(counter),
+        isGlobalsCBuffer(globalsBuffer) {}
 
   SpirvVariable *getSpirvInstr() const { return variable; }
+  const Decl *getDeclaration() const { return declaration; }
   SourceLocation getSourceLocation() const { return srcLoc; }
   const hlsl::RegisterAssignment *getRegister() const { return reg; }
   const VKBindingAttr *getBinding() const { return binding; }
@@ -130,6 +132,7 @@ public:
 
 private:
   SpirvVariable *variable;                    ///< The variable
+  const Decl *declaration;                    ///< The declaration
   SourceLocation srcLoc;                      ///< Source location
   const hlsl::RegisterAssignment *reg;        ///< HLSL register assignment
   const VKBindingAttr *binding;               ///< Vulkan binding assignment
@@ -407,12 +410,11 @@ public:
   /// VarDecls (such as some ray tracing enums).
   void tryToCreateImplicitConstVar(const ValueDecl *);
 
-  /// \brief Creates a variable for hull shader output patch with Workgroup
+  /// \brief Creates a variable for hull shader output patch with Output
   /// storage class, and registers the SPIR-V variable for the given decl.
   SpirvInstruction *createHullMainOutputPatch(const ParmVarDecl *param,
                                               const QualType retType,
-                                              uint32_t numOutputControlPoints,
-                                              SourceLocation loc);
+                                              uint32_t numOutputControlPoints);
 
   /// Raytracing specific functions
   /// \brief Creates a ShaderRecordBufferNV block from the given decl.
@@ -523,6 +525,10 @@ public:
   /// This method will write the set and binding number assignment into the
   /// module under construction.
   bool decorateResourceBindings();
+
+  /// \brief Decorates resource variables with Coherent decoration if they
+  /// are declared as globallycoherent.
+  bool decorateResourceCoherent();
 
   /// \brief Returns whether the SPIR-V module requires SPIR-V legalization
   /// passes run to make it legal.
@@ -660,6 +666,11 @@ private:
                                      const llvm::StringRef name,
                                      SourceLocation);
 
+  // Create intermediate output variable to communicate patch constant
+  // data in hull shader since workgroup memory is not allowed there.
+  SpirvVariable *createSpirvIntermediateOutputStageVar(
+      const NamedDecl *decl, const llvm::StringRef name, QualType asType);
+
   /// Returns true if all vk:: attributes usages are valid.
   bool validateVKAttributes(const NamedDecl *decl);
 
@@ -759,7 +770,8 @@ private:
   /// b - for constant buffer views (CBV)
   ///    CBUFFER
   ///    CONSTANTBUFFER
-  bool getImplicitRegisterType(const ResourceVar &var, char *registerTypeOut) const;
+  bool getImplicitRegisterType(const ResourceVar &var,
+                               char *registerTypeOut) const;
 
 private:
   SpirvBuilder &spvBuilder;

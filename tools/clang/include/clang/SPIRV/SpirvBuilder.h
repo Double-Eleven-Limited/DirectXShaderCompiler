@@ -68,7 +68,8 @@ public:
   /// \brief Creates a SpirvFunction object with the given information and adds
   /// it to list of all discovered functions in the SpirvModule.
   SpirvFunction *createSpirvFunction(QualType returnType, SourceLocation,
-                                     llvm::StringRef name, bool isPrecise);
+                                     llvm::StringRef name, bool isPrecise,
+                                     bool isNoInline = false);
 
   /// \brief Begins building a SPIR-V function by allocating a SpirvFunction
   /// object. Returns the pointer for the function on success. Returns nullptr
@@ -77,7 +78,7 @@ public:
   /// At any time, there can only exist at most one function under building.
   SpirvFunction *beginFunction(QualType returnType, SourceLocation,
                                llvm::StringRef name = "",
-                               bool isPrecise = false,
+                               bool isPrecise = false, bool isNoInline = false,
                                SpirvFunction *func = nullptr);
 
   /// \brief Creates and registers a function parameter of the given pointer
@@ -495,6 +496,12 @@ public:
   createRayQueryOpsKHR(spv::Op opcode, QualType resultType,
                        llvm::ArrayRef<SpirvInstruction *> operands,
                        bool cullFlags, SourceLocation loc);
+  /// \brief Creates an OpReadClockKHR instruction.
+  SpirvInstruction *createReadClock(SpirvInstruction *scope, SourceLocation);
+
+  /// \brief Create Raytracing terminate Ops
+  /// OpIgnoreIntersectionKHR/OpTerminateIntersectionKHR
+  void createRaytracingTerminateKHR(spv::Op opcode, SourceLocation loc);
 
   // === SPIR-V Module Structure ===
   inline void setMemoryModel(spv::AddressingModel, spv::MemoryModel);
@@ -609,6 +616,9 @@ public:
   /// \brief Decorates the given target with PerTaskNV
   void decoratePerTaskNV(SpirvInstruction *target, uint32_t offset,
                          SourceLocation);
+
+  /// \brief Decorates the given target with Coherent
+  void decorateCoherent(SpirvInstruction *target, SourceLocation);
 
   /// --- Constants ---
   /// Each of these methods can acquire a unique constant from the SpirvContext,

@@ -32,8 +32,10 @@ SpirvBuilder::SpirvBuilder(ASTContext &ac, SpirvContext &ctx,
 SpirvFunction *SpirvBuilder::createSpirvFunction(QualType returnType,
                                                  SourceLocation loc,
                                                  llvm::StringRef name,
-                                                 bool isPrecise) {
-  auto *fn = new (context) SpirvFunction(returnType, loc, name, isPrecise);
+                                                 bool isPrecise,
+                                                 bool isNoInline) {
+  auto *fn =
+      new (context) SpirvFunction(returnType, loc, name, isPrecise, isNoInline);
   mod->addFunction(fn);
   return fn;
 }
@@ -41,7 +43,7 @@ SpirvFunction *SpirvBuilder::createSpirvFunction(QualType returnType,
 SpirvFunction *SpirvBuilder::beginFunction(QualType returnType,
                                            SourceLocation loc,
                                            llvm::StringRef funcName,
-                                           bool isPrecise,
+                                           bool isPrecise, bool isNoInline,
                                            SpirvFunction *func) {
   assert(!function && "found nested function");
   if (func) {
@@ -50,8 +52,10 @@ SpirvFunction *SpirvBuilder::beginFunction(QualType returnType,
     function->setSourceLocation(loc);
     function->setFunctionName(funcName);
     function->setPrecise(isPrecise);
+    function->setNoInline(isNoInline);
   } else {
-    function = createSpirvFunction(returnType, loc, funcName, isPrecise);
+    function =
+        createSpirvFunction(returnType, loc, funcName, isPrecise, isNoInline);
   }
 
   return function;
@@ -925,6 +929,23 @@ SpirvBuilder::createRayQueryOpsKHR(spv::Op opcode, QualType resultType,
   return inst;
 }
 
+SpirvInstruction *SpirvBuilder::createReadClock(SpirvInstruction *scope,
+                                                SourceLocation loc) {
+  assert(insertPoint && "null insert point");
+  assert(scope->getAstResultType()->isIntegerType());
+  auto *inst =
+      new (context) SpirvReadClock(astContext.UnsignedLongLongTy, scope, loc);
+  insertPoint->addInstruction(inst);
+  return inst;
+}
+
+void SpirvBuilder::createRaytracingTerminateKHR(spv::Op opcode,
+                                                SourceLocation loc) {
+  assert(insertPoint && "null insert point");
+  auto *inst = new (context) SpirvRayTracingTerminateOpKHR(opcode, loc);
+  insertPoint->addInstruction(inst);
+}
+
 void SpirvBuilder::addModuleProcessed(llvm::StringRef process) {
   mod->addModuleProcessed(new (context) SpirvModuleProcessed({}, process));
 }
@@ -1144,6 +1165,13 @@ void SpirvBuilder::decoratePerTaskNV(SpirvInstruction *target, uint32_t offset,
   mod->addDecoration(decor);
 }
 
+void SpirvBuilder::decorateCoherent(SpirvInstruction *target,
+                                    SourceLocation srcLoc) {
+  auto *decor =
+      new (context) SpirvDecoration(srcLoc, target, spv::Decoration::Coherent);
+  mod->addDecoration(decor);
+}
+
 SpirvConstant *SpirvBuilder::getConstantInt(QualType type, llvm::APInt value,
                                             bool specConst) {
   // We do not reuse existing constant integers. Just create a new one.
@@ -1209,7 +1237,8 @@ std::vector<uint32_t> SpirvBuilder::takeModule() {
   RelaxedPrecisionVisitor relaxedPrecisionVisitor(context, spirvOptions);
   PreciseVisitor preciseVisitor(context, spirvOptions);
   NonUniformVisitor nonUniformVisitor(context, spirvOptions);
-  RemoveBufferBlockVisitor removeBufferBlockVisitor(context, spirvOptions);
+  RemoveBufferBlockVisitor removeBufferBlockVisitor(astContext, context,
+                                                    spirvOptions);
   EmitVisitor emitVisitor(astContext, context, spirvOptions);
 
   mod->invokeVisitor(&literalTypeVisitor, true);
