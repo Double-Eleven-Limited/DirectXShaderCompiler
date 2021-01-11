@@ -3896,6 +3896,10 @@ void TranslateStore(DxilResource::Kind RK, Value *handle, Value *val,
       mask = DXIL::kCompMask_All;
       emptyVal = Builder.CreateExtractElement(val, (uint64_t)0);
     }
+    if (vecSize > 4) {
+      dxilutil::EmitErrorOnInstruction(Builder.GetInsertPoint(),
+                                       "DXC bug: cannot store matrix types https://github.com/microsoft/DirectXShaderCompiler/issues/3225");
+    }
 
     for (unsigned i = 0; i < 4; i++) {
       if (i < vecSize) {
