@@ -19,21 +19,14 @@ if "%HLSL_SRC_DIR%"=="" (
 )
 
 if "%1"=="-buildoutdir" (
-  echo Build output directory set to %2
-  set HLSL_BLD_DIR=%2
+  echo Build output directory set to %~2
+  set "HLSL_BLD_DIR=%~2"
   shift /1
   shift /1
 )
 
 if "%HLSL_BLD_DIR%"=="" (
   echo Missing build directory.
-  exit /b 1
-)
-
-where cmake.exe 1>nul 2>nul
-if errorlevel 1 (
-  echo Unable to find cmake.exe on the path.
-  echo cmake 3.4 is available from https://cmake.org/files/v3.4/cmake-3.4.0-win32-x86.exe
   exit /b 1
 )
 
@@ -47,7 +40,8 @@ set BUILD_CONFIG=Debug
 set DO_SETUP=1
 set DO_BUILD=1
 set CMAKE_OPTS=
-set SPEAK=1
+set CMAKE_PATH=
+set SPEAK=0
 set PARALLEL_OPT=/m
 set ALL_DEFS=OFF
 set ANALYZE=OFF
@@ -87,15 +81,15 @@ if "%1"=="-fv" (
   shift /1
 )
 if "%1"=="-fvloc" (
-  echo Fixed version flag set for build, version file location: %2
+  echo Fixed version flag set for build, version file location: %~2
   set FIXED_VER=ON
-  set FIXED_LOC=%2
+  set "FIXED_LOC=%~2"
   shift /1
   shift /1
 )
 if "%1"=="-cv" (
   echo Set the CLANG_VENDOR value.
-  set VENDOR=%2
+  set "VENDOR=%~2"
   shift /1
   shift /1
 )
@@ -119,11 +113,15 @@ if /i "%1"=="-arm64" (
   set BUILD_ARCH=ARM64
   shift /1
 )
-if "%1"=="-Debug" (
+if /i "%1"=="-arm64ec" (
+  set BUILD_ARCH=ARM64EC
+  shift /1
+)
+if /i "%1"=="-Debug" (
   set BUILD_CONFIG=Debug
   shift /1
 )
-if "%1"=="-Release" (
+if /i "%1"=="-Release" (
   set BUILD_CONFIG=Release
   shift /1
 )
@@ -137,17 +135,21 @@ if "%1"=="-vs2019" (
 )
 
 if "%1"=="-tblgen" (
-  if "%2" == "" (
+  if "%~2" == "" (
     echo Missing path argument after -tblgen.
     exit /b
   ) 
-  set BUILD_TBLGEN_PATH=%2
+  set "BUILD_TBLGEN_PATH=%~2"
   shift /1
   shift /1
 )
 
 if "%1"=="-dont-speak" (
-  set SPEAK=0
+  shift /1
+)
+
+if "%1"=="-speak-up" (
+  set SPEAK=1
   shift /1
 )
 
@@ -168,15 +170,31 @@ if "%1"=="-dxc-cmake-extra-args" (
 )
 
 if "%1"=="-dxc-cmake-begins-include" (
-  set CMAKE_OPTS=%CMAKE_OPTS% -DDXC_CMAKE_BEGINS_INCLUDE=%2
+  set "CMAKE_OPTS=%CMAKE_OPTS% -DDXC_CMAKE_BEGINS_INCLUDE=%~2"
   shift /1
   shift /1
 )
 
 if "%1"=="-dxc-cmake-ends-include" (
-  set CMAKE_OPTS=%CMAKE_OPTS% -DDXC_CMAKE_ENDS_INCLUDE=%2
+  set "CMAKE_OPTS=%CMAKE_OPTS% -DDXC_CMAKE_ENDS_INCLUDE=%~2"
   shift /1
   shift /1
+)
+
+if "%1"=="-dxc-cmake" (
+  set "CMAKE_PATH=%~2"
+  shift /1
+  shift /1
+)
+
+if "%CMAKE_PATH%"=="" (
+  where cmake.exe 1>nul 2>nul
+  if errorlevel 1 (
+    echo Unable to find cmake.exe on the path.
+    echo cmake 3.4 is available from https://cmake.org/files/v3.4/cmake-3.4.0-win32-x86.exe
+    exit /b 1
+  )
+  set CMAKE_PATH=cmake
 )
 
 rem Begin SPIRV change
@@ -222,6 +240,17 @@ if /i "%BUILD_ARCH%"=="arm64" (
   if "%BUILD_VS_VER%"=="2019" (
     set VS2019ARCH=-AARM64
   )
+)
+
+if /i "%BUILD_ARCH%"=="arm64ec" (
+  if "%BUILD_VS_VER%" NEQ "2019" (
+    echo "ARM64EC platform is not supported on VS2017."    
+    exit /b 1
+  )
+  set BUILD_GENERATOR_PLATFORM=ARM64EC
+  set BUILD_ARM_CROSSCOMPILING=1
+  set VS2019ARCH=-AARM64EC
+  set CMAKE_OPTS=%CMAKE_OPTS% -DCMAKE_SYSTEM_VERSION=10.0.20207.0 -DMSVC_BUILD_AS_X=1
 )
 
 if "%1"=="-ninja" (
@@ -312,7 +341,7 @@ exit /b 0
 echo Builds HLSL solutions and the product and test binaries for the current
 echo flavor and architecture.
 echo.
-echo hctbuild [-s or -b] [-alldef] [-analyze] [-official] [-fv] [-fvloc <path>] [-rel] [-arm or -arm64 or -x86 or -x64] [-Release] [-Debug] [-vs2017] [-vs2019] [-ninja] [-tblgen path] [-dont-speak] [-no-parallel] [-no-dxilconv]
+echo hctbuild [-s or -b] [-alldef] [-analyze] [-official] [-fv] [-fvloc <path>] [-rel] [-arm or -arm64 or -x86 or -x64] [-Release] [-Debug] [-vs2017] [-vs2019] [-ninja] [-tblgen path] [-speak-up] [-no-parallel] [-no-dxilconv]
 echo.
 echo   -s   creates the projects only, without building
 echo   -b   builds the existing project
@@ -323,7 +352,7 @@ echo   -official      will generate official version for build
 echo   -fv            fixes the resource version for release (utils\version\version.inc)
 echo   -fvloc <path>  directory with the version.inc file
 echo   -rel           builds release rather than debug
-echo   -dont-speak    disables audible build confirmation
+echo   -speak-up      enables audible build confirmation
 echo   -no-parallel   disables parallel build
 echo   -no-dxilconv   disables build of DXBC to DXIL converter and tools
 echo   -vs2017        uses Visual Studio 2017 to build
@@ -371,12 +400,12 @@ cd /d %3
 if "%DO_SETUP%"=="1" (
   echo Creating solution files for %2, logging to %3\cmake-log.txt
   if "%BUILD_GENERATOR%"=="Ninja" (
-    echo Running cmake -DCMAKE_BUILD_TYPE:STRING=%1 %CMAKE_OPTS% -G %4 %HLSL_SRC_DIR% > %3\cmake-log.txt
-    cmake -DCMAKE_BUILD_TYPE:STRING=%1 %CMAKE_OPTS% -G %4 %HLSL_SRC_DIR% >> %3\cmake-log.txt 2>&1
+    echo Running "%CMAKE_PATH%" -DCMAKE_BUILD_TYPE:STRING=%1 %CMAKE_OPTS% -G %4 %HLSL_SRC_DIR% > %3\cmake-log.txt
+    "%CMAKE_PATH%" -DCMAKE_BUILD_TYPE:STRING=%1 %CMAKE_OPTS% -G %4 %HLSL_SRC_DIR% >> %3\cmake-log.txt 2>&1
   ) else (
     rem -DCMAKE_BUILD_TYPE:STRING=%1 is not necessary for multi-config generators like VS
-    echo Running cmake %CMAKE_OPTS% -G %4 %5 %HLSL_SRC_DIR% > %3\cmake-log.txt
-    cmake %CMAKE_OPTS% -G %4 %5 %HLSL_SRC_DIR% >> %3\cmake-log.txt 2>&1
+    echo Running "%CMAKE_PATH%" %CMAKE_OPTS% -G %4 %5 %HLSL_SRC_DIR% > %3\cmake-log.txt
+    "%CMAKE_PATH%" %CMAKE_OPTS% -G %4 %5 %HLSL_SRC_DIR% >> %3\cmake-log.txt 2>&1
   )
   if errorlevel 1 (
     echo Failed to configure cmake projects.
