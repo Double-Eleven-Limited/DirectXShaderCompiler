@@ -2269,6 +2269,10 @@ TEST_F(FileTest, RayTracingTerminate) {
   runFileTest("raytracing.khr.terminate.hlsl");
 }
 
+TEST_F(FileTest, RayTracingTargetEnvErro) {
+  runFileTest("raytracing.target-env-error.hlsl", Expect::Failure);
+}
+
 // For decoration uniqueness
 TEST_F(FileTest, DecorationUnique) { runFileTest("decoration.unique.hlsl"); }
 
@@ -2287,6 +2291,9 @@ TEST_F(FileTest, DecorationRelaxedPrecisionStruct) {
 }
 TEST_F(FileTest, DecorationRelaxedPrecisionImage) {
   runFileTest("decoration.relaxed-precision.image.hlsl");
+}
+TEST_F(FileTest, DecorationRelaxedPrecisionBool) {
+  runFileTest("decoration.relaxed-precision.bool.hlsl");
 }
 
 // For NoContraction decorations
@@ -2426,6 +2433,14 @@ TEST_F(FileTest, Vk1p2BlockDecoration) {
 }
 TEST_F(FileTest, Vk1p2RemoveBufferBlockRuntimeArray) {
   runFileTest("vk.1p2.remove.bufferblock.runtimearray.hlsl");
+}
+TEST_F(FileTest, Vk1p2RemoveBufferBlockPtrToPtr) {
+  setBeforeHLSLLegalization();
+  runFileTest("vk.1p2.remove.bufferblock.ptr-to-ptr.hlsl");
+}
+TEST_F(FileTest, Vk1p2RemoveBufferBlockPtrToPtr2) {
+  setBeforeHLSLLegalization();
+  runFileTest("vk.1p2.remove.bufferblock.ptr-to-ptr.example2.hlsl");
 }
 
 // Test shaders that require Vulkan1.1 support with
