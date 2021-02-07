@@ -441,6 +441,8 @@ uint32_t getElementSpirvBitwidth(const ASTContext &astContext, QualType type,
     case BuiltinType::Int8_4Packed:
     case BuiltinType::UInt8_4Packed:
     case BuiltinType::Float:
+    case BuiltinType::Long:
+    case BuiltinType::ULong:
       return 32;
     case BuiltinType::Double:
     case BuiltinType::LongLong:
@@ -1352,6 +1354,23 @@ bool isStructureContainingAnyKindOfBuffer(QualType type) {
       }
     }
   }
+  return false;
+}
+
+bool isScalarOrNonStructAggregateOfNumericalTypes(QualType type) {
+  // Remove arrayness if present.
+  while (type->isArrayType())
+    type = type->getAsArrayTypeUnsafe()->getElementType();
+
+  QualType elemType = {};
+  if (isScalarType(type, &elemType) || isVectorType(type, &elemType) ||
+      isMxNMatrix(type, &elemType)) {
+    // Return true if the basic elemen type is a float or non-boolean integer
+    // type.
+    return elemType->isFloatingType() ||
+           (elemType->isIntegerType() && !elemType->isBooleanType());
+  }
+
   return false;
 }
 

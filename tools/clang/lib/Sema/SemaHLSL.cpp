@@ -8674,7 +8674,8 @@ bool HLSLExternalSource::CanConvert(
   if ((SourceInfo.EltKind == AR_OBJECT_CONSTANT_BUFFER ||
        SourceInfo.EltKind == AR_OBJECT_TEXTURE_BUFFER) &&
       TargetInfo.ShapeKind == AR_TOBJ_COMPOUND) {
-    standard->Second = ICK_Flat_Conversion;
+    if (standard)
+      standard->Second = ICK_Flat_Conversion;
     return hlsl::GetHLSLResourceResultType(source) == target;
   }
 
@@ -9104,7 +9105,11 @@ void HLSLExternalSource::CheckBinOpForHLSL(
                rightElementKind != AR_BASIC_LITERAL_INT &&
                rightElementKind != AR_BASIC_LITERAL_FLOAT) {
       // For case like 1<<x.
-      resultElementKind = AR_BASIC_UINT32;
+      m_sema->Diag(OpLoc, diag::warn_hlsl_ambiguous_literal_shift);
+      if (rightElementKind == AR_BASIC_UINT32)
+        resultElementKind = AR_BASIC_UINT32;
+      else
+        resultElementKind = AR_BASIC_INT32;
     } else if (resultElementKind == AR_BASIC_BOOL &&
                BinaryOperatorKindRequiresBoolAsNumeric(Opc)) {
       resultElementKind = AR_BASIC_INT32;
@@ -11987,18 +11992,17 @@ bool Sema::DiagnoseHLSLDecl(Declarator &D, DeclContext *DC, Expr *BitWidth,
          "otherwise this is called without checking language first");
 
   // NOTE: some tests may declare templates.
-  if (DC->isNamespace() || DC->isDependentContext()) return true;
+  if (DC->isDependentContext()) return true;
 
   DeclSpec::SCS storage = D.getDeclSpec().getStorageClassSpec();
   assert(!DC->isClosure() && "otherwise parser accepted closure syntax instead of failing with a syntax error");
   assert(!DC->isDependentContext() && "otherwise parser accepted a template instead of failing with a syntax error");
-  assert(!DC->isNamespace() && "otherwise parser accepted a namespace instead of failing a syntax error");
 
   bool result = true;
   bool isTypedef = storage == DeclSpec::SCS_typedef;
   bool isFunction = D.isFunctionDeclarator() && !DC->isRecord();
   bool isLocalVar = DC->isFunctionOrMethod() && !isFunction && !isTypedef;
-  bool isGlobal = !isParameter && !isTypedef && !isFunction && (DC->isTranslationUnit() || DC->getDeclKind() == Decl::HLSLBuffer);
+  bool isGlobal = !isParameter && !isTypedef && !isFunction && (DC->isTranslationUnit() || DC->isNamespace() || DC->getDeclKind() == Decl::HLSLBuffer);
   bool isMethod = DC->isRecord() && D.isFunctionDeclarator() && !isTypedef;
   bool isField = DC->isRecord() && !D.isFunctionDeclarator() && !isTypedef;
 
