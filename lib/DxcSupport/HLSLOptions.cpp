@@ -605,6 +605,10 @@ int ReadDxcOpts(const OptTable *optionTable, unsigned flagsToInclude,
   opts.OptDump = Args.hasFlag(OPT_Odump, OPT_INVALID, false);
 
   opts.DisableValidation = Args.hasFlag(OPT_VD, OPT_INVALID, false);
+  if (opts.DisableValidation) {
+    opts.ValVerMajor = 0;
+    opts.ValVerMinor = 0;
+  }
 
   opts.AllResourcesBound = Args.hasFlag(OPT_all_resources_bound, OPT_INVALID, false);
   opts.AllResourcesBound = Args.hasFlag(OPT_all_resources_bound_, OPT_INVALID, opts.AllResourcesBound);

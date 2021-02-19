@@ -1161,6 +1161,17 @@ public:
     BOOL Int64ShaderOps;
   };
 
+  bool IsDeviceBasicAdapter(ID3D12Device *pDevice) {
+    CComPtr<IDXGIFactory4> factory;
+    VERIFY_SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)));
+    LUID adapterID = pDevice->GetAdapterLuid();
+    CComPtr<IDXGIAdapter1> adapter;
+    factory->EnumAdapterByLuid(adapterID, IID_PPV_ARGS(&adapter));
+    DXGI_ADAPTER_DESC1 AdapterDesc;
+    VERIFY_SUCCEEDED(adapter->GetDesc1(&AdapterDesc));
+    return (AdapterDesc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE);
+  }
+
   bool DoesDeviceSupportInt64(ID3D12Device *pDevice) {
     D3D12_FEATURE_DATA_D3D12_OPTIONS1 O;
     if (FAILED(pDevice->CheckFeatureSupport((D3D12_FEATURE)D3D12_FEATURE_D3D12_OPTIONS1, &O, sizeof(O))))
@@ -3208,7 +3219,7 @@ TEST_F(ExecutionTest, QuadReadTest) {
   if (!CreateDevice(&pDevice))
     return;
 
-  if (GetTestParamUseWARP(UseWarpByDefault())) {
+  if (GetTestParamUseWARP(UseWarpByDefault()) || IsDeviceBasicAdapter(pDevice)) {
     WEX::Logging::Log::Comment(L"WARP does not support QuadRead in compute shaders.");
     WEX::Logging::Log::Result(WEX::Logging::TestResults::Skipped);
     return;
@@ -3392,7 +3403,7 @@ TEST_F(ExecutionTest, ComputeSampleTest) {
   test->Test->GetReadBackData("U0", &data);
   const UINT *pPixels = (UINT *)data.data();
 
-  VerifySampleResults(pPixels, 1008);
+  VerifySampleResults(pPixels, 84*4);
 
   // Test 2D compute shader
   pShaderOp->CS = CS2;
@@ -3402,7 +3413,7 @@ TEST_F(ExecutionTest, ComputeSampleTest) {
   test->Test->GetReadBackData("U0", &data);
   pPixels = (UINT *)data.data();
 
-  VerifySampleResults(pPixels, 1008);
+  VerifySampleResults(pPixels, 84*4);
 
 
   if (DoesDeviceSupportMeshAmpDerivatives(pDevice)) {
@@ -8418,7 +8429,7 @@ bool AtomicResultMatches(const BYTE *uResults, uint64_t gold, size_t size) {
 
 // Used to duplicate the lower half bits into the upper half bits of an integer
 // To verify that the full value is being considered, many tests duplicate the results into the upper half
-#define SHIFT(val, bits) (((val)&((1ULL<<(bits))-1ULL)) | ((val) << (bits)))
+#define SHIFT(val, bits) (((val)&((1ULL<<(bits))-1ULL)) | ((uint64_t)(val) << (bits)))
 
 // Symbolic constants for the results
 #define ADD_IDX 0
@@ -8439,17 +8450,17 @@ bool AtomicResultMatches(const BYTE *uResults, uint64_t gold, size_t size) {
 // which is used to determine what the results should be. <bitSize> is the size in bits of
 // the produced results, either 32 or 64.
 void VerifyAtomicResults(const BYTE *uResults, const BYTE *sResults,
-                         const BYTE *pXchg, size_t stride, size_t maxIdx, size_t bitSize) {
+                         const BYTE *pXchg, size_t stride, uint64_t maxIdx, size_t bitSize) {
   // Each atomic test performs the test on the value in the lower half
   // and also duplicated in the upper half of the value. The SHIFT macros account for this.
   // This is to verify that the upper bits are considered
-  size_t shBits = bitSize/2;
+  uint64_t shBits = bitSize/2;
   size_t byteSize = bitSize/8;
 
   // Test ADD Operation
   // ADD just sums all the indices. The result should the sum of the highest and lowest indices
   // multiplied by half the number of sums.
-  size_t addResult = (maxIdx)*(maxIdx-1)/2;
+  uint64_t addResult = (maxIdx)*(maxIdx-1)/2;
   LogCommentFmt(L"Verifying %d-bit integer atomic add", bitSize);
   // For 32-bit values, the sum exceeds the 16 bit limit, so we can't duplicate
   // That's fine, the duplication is really for 64-bit values.
@@ -8475,10 +8486,10 @@ void VerifyAtomicResults(const BYTE *uResults, const BYTE *sResults,
   VERIFY_IS_TRUE(AtomicResultMatches(uResults + stride*UMAX_IDX, ~0ULL, byteSize)); // UMax
 
   // For signed min/max, the index just before the last will be bitflipped (maxIndex is always even).
-  // This is interpretted as -maxIndex and will be the lowest
+  // This is interpretted as -(maxIndex-1) and will be the lowest
   // The maxIndex will be unaltered and interpretted as the highest.
   LogCommentFmt(L"Verifying %d-bit integer atomic smin", bitSize);
-  VERIFY_IS_TRUE(AtomicResultMatches(sResults + stride*SMIN_IDX, SHIFT(-((int)maxIdx-1), shBits), byteSize)); // SMin
+  VERIFY_IS_TRUE(AtomicResultMatches(sResults + stride*SMIN_IDX, SHIFT(-((int64_t)maxIdx-1), shBits), byteSize)); // SMin
   LogCommentFmt(L"Verifying %d-bit integer atomic smax", bitSize);
   VERIFY_IS_TRUE(AtomicResultMatches(sResults + stride*SMAX_IDX, SHIFT(maxIdx-1, shBits), byteSize)); // SMax
 
@@ -8495,7 +8506,7 @@ void VerifyAtomicResults(const BYTE *uResults, const BYTE *sResults,
   // are bitflipped versions of each other.
   // Finding the most significant set bit by the max index or next power of two (pot)
   // gives us the pivot point for these results
-  size_t nextPot = 1ULL << (bitSize - 1);
+  uint64_t nextPot = 1ULL << (bitSize - 1);
   for (;nextPot && !((maxIdx-1) & (nextPot)); nextPot >>= 1) {}
   nextPot <<= 1;
   LogCommentFmt(L"Verifying %d-bit integer atomic and", bitSize);
@@ -8520,7 +8531,7 @@ void VerifyAtomicResults(const BYTE *uResults, const BYTE *sResults,
   // Each "pass" sets or clears the bits depending on what's already there.
   // if the number of the pass is odd, the bits are being unset and all above the mod position should be set.
   // If even, the bits are in the process of being set and bits below the mod position should be set.
-  size_t xorResult = ((1ULL<<((maxIdx)%(bitSize-1))) -1);
+  uint64_t xorResult = ((1ULL<<((maxIdx)%(bitSize-1))) -1);
 
   if (((maxIdx/(bitSize-1))&1)) {
     xorResult ^= ~0ULL;
@@ -8561,7 +8572,7 @@ void VerifyAtomicResults(const BYTE *uResults, const BYTE *sResults,
 }
 
 void VerifyAtomicsRawTest(std::shared_ptr<ShaderOpTestResult> test,
-                          size_t maxIdx, size_t bitSize) {
+                          uint64_t maxIdx, size_t bitSize) {
 
   size_t stride = 8;
   // struct mirroring that in the shader
@@ -8605,7 +8616,7 @@ void VerifyAtomicsRawTest(std::shared_ptr<ShaderOpTestResult> test,
 }
 
 void VerifyAtomicsTypedTest(std::shared_ptr<ShaderOpTestResult> test,
-                            size_t maxIdx, size_t bitSize) {
+                            uint64_t maxIdx, size_t bitSize) {
 
 
   size_t stride = 8;
@@ -8655,7 +8666,7 @@ void VerifyAtomicsTypedTest(std::shared_ptr<ShaderOpTestResult> test,
 }
 
 void VerifyAtomicsSharedTest(std::shared_ptr<ShaderOpTestResult> test,
-                             size_t maxIdx, size_t bitSize) {
+                             uint64_t maxIdx, size_t bitSize) {
 
   size_t stride = 8;
   MappedData uintData, xchgData;
@@ -8674,7 +8685,7 @@ void VerifyAtomicsSharedTest(std::shared_ptr<ShaderOpTestResult> test,
 }
 
 void VerifyAtomicsTest(std::shared_ptr<ShaderOpTestResult> test,
-                       size_t maxIdx, size_t bitSize) {
+                       uint64_t maxIdx, size_t bitSize) {
   VerifyAtomicsRawTest(test, maxIdx, bitSize);
   VerifyAtomicsTypedTest(test, maxIdx, bitSize);
 }
@@ -8908,8 +8919,8 @@ void VerifyAtomicFloatResults(const float *results) {
   // The sentinal value is 0.123, for which this compare is sufficient.
   VERIFY_IS_TRUE(results[0] >= 0.120 && results[0] < 0.125);
   // Start at 1 because 0 is just for NaN tests
-  for (size_t i = 1; i < 64; i++) {
-    VERIFY_ARE_EQUAL((int(results[i])/3)%63 + 1, (int)i);
+  for (int i = 1; i < 64; i++) {
+    VERIFY_ARE_EQUAL((int(results[i])/3)%63 + 1, i);
   }
 }
 
@@ -8943,8 +8954,8 @@ void VerifyAtomicsFloatTest(std::shared_ptr<ShaderOpTestResult> test) {
   const AtomicStuff *pStructData = (AtomicStuff *)Data.data();
   LogCommentFmt(L"Verifying float cmp/xchg atomic operations on RWStructuredBuffer resources");
   VERIFY_IS_TRUE(pStructData[0].fltEl[1] >= 0.120 && pStructData[0].fltEl[1] < 0.125);
-  for (size_t i = 1; i < 64; i++) {
-    VERIFY_ARE_EQUAL((int(pStructData[i].fltEl[1])/3)%63 + 1, (int)i);
+  for (int i = 1; i < 64; i++) {
+    VERIFY_ARE_EQUAL((int(pStructData[i].fltEl[1])/3)%63 + 1, i);
   }
 
   test->Test->GetReadBackData("U1", &Data);
