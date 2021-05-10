@@ -25,7 +25,6 @@
 #include "dxc/HLSL/HLOperationLowerExtension.h"
 #include "dxc/HLSL/HLOperations.h"
 #include "dxc/HlslIntrinsicOp.h"
-#include "dxc/HLSL/DxilConvergent.h"
 #include "dxc/DXIL/DxilResourceProperties.h"
 
 #include "llvm/IR/GetElementPtrTypeIterator.h"
@@ -844,8 +843,8 @@ Value *FindScalarSource(Value *src, unsigned vecIdx = 0) {
         vecIdx = (unsigned)cast<ConstantInt>(EE->getIndexOperand())
           ->getUniqueInteger().getLimitedValue();
         src = EE->getVectorOperand();
-      } else if (hlsl::IsConvergentMarker(src)) {
-        src = hlsl::GetConvergentSource(src);
+      } else if (hlsl::dxilutil::IsConvergentMarker(src)) {
+        src = hlsl::dxilutil::GetConvergentSource(src);
       } else {
         break;  // Found it.
       }
@@ -3167,9 +3166,12 @@ GatherHelper::GatherHelper(
       if (ch != GatherChannel::GatherAll)
         TranslateSampleOffset(CI, HLOperandIndex::kGatherSampleOffsetArgIndex,
                               offsetSize);
-      statusIdx =
-          hasSampleOffsets ? HLOperandIndex::kGatherStatusWithSampleOffsetArgIndex
-                           : HLOperandIndex::kGatherStatusArgIndex;
+      if (hasSampleOffsets) {
+        statusIdx = HLOperandIndex::kGatherStatusWithSampleOffsetArgIndex;
+      } else {
+        opcode = OP::OpCode::TextureGatherImm;
+        statusIdx = HLOperandIndex::kGatherStatusArgIndex;
+      }
     }
     SetStatus(CI, statusIdx);
   } break;
@@ -3185,10 +3187,12 @@ GatherHelper::GatherHelper(
       if (ch != GatherChannel::GatherAll)
         TranslateSampleOffset(CI, HLOperandIndex::kGatherCmpSampleOffsetArgIndex,
                               offsetSize);
-      statusIdx =
-          hasSampleOffsets
-              ? HLOperandIndex::kGatherCmpStatusWithSampleOffsetArgIndex
-              : HLOperandIndex::kGatherCmpStatusArgIndex;
+      if (hasSampleOffsets) {
+        statusIdx = HLOperandIndex::kGatherCmpStatusWithSampleOffsetArgIndex;
+      } else {
+        opcode = OP::OpCode::TextureGatherCmpImm;
+        statusIdx = HLOperandIndex::kGatherCmpStatusArgIndex;
+      }
     }
     SetStatus(CI, statusIdx);
   } break;
@@ -3283,9 +3287,9 @@ Value *TranslateGather(CallInst *CI, IntrinsicOp IOP, OP::OpCode opcode,
   }
   Type *Ty = CI->getType();
 
-  Function *F = hlslOP->GetOpFunc(opcode, Ty->getScalarType());
+  Function *F = hlslOP->GetOpFunc(gatherHelper.opcode, Ty->getScalarType());
 
-  Constant *opArg = hlslOP->GetU32Const((unsigned)opcode);
+  Constant *opArg = hlslOP->GetU32Const((unsigned)gatherHelper.opcode);
   Value *channelArg = hlslOP->GetU32Const(gatherHelper.channel);
 
   switch (opcode) {
@@ -3806,6 +3810,10 @@ void TranslateStore(DxilResource::Kind RK, Value *handle, Value *val,
                     Value *offset, IRBuilder<> &Builder, hlsl::OP *OP) {
   Type *Ty = val->getType();
 
+  // This function is no longer used for lowering stores to a
+  // structured buffer.
+  DXASSERT_NOMSG(RK != DxilResource::Kind::StructuredBuffer);
+
   OP::OpCode opcode = OP::OpCode::NumOpCodes;
   switch (RK) {
   case DxilResource::Kind::RawBuffer:
@@ -3921,9 +3929,15 @@ void TranslateStore(DxilResource::Kind RK, Value *handle, Value *val,
 
     // For second and subsequent store calls, increment the offset0 (i.e. store index)
     if (j > 0) {
-      Value* newOffset = ConstantInt::get(Builder.getInt32Ty(), j);
-      newOffset = Builder.CreateAdd(storeArgsList[0][offset0Idx], newOffset);
-      storeArgsList[j][offset0Idx] = newOffset;
+      // Greater than four-components store is not allowed for
+      // TypedBuffer and Textures. So greater than four elements
+      // scenario should only get hit here for RawBuffer.
+      DXASSERT_NOMSG(RK == DxilResource::Kind::RawBuffer);
+      unsigned EltSize = OP->GetAllocSizeForType(EltTy);
+      unsigned newOffset = EltSize * MaxStoreElemCount * j;
+      Value* newOffsetVal = ConstantInt::get(Builder.getInt32Ty(), newOffset);
+      newOffsetVal = Builder.CreateAdd(storeArgsList[0][offset0Idx], newOffsetVal);
+      storeArgsList[j][offset0Idx] = newOffsetVal;
     }
 
     // values
@@ -6638,15 +6652,17 @@ void TranslateCBGepLegacy(GetElementPtrInst *GEP, Value *handle,
         }
       } else {
         Type *EltTy = GEPIt->getVectorElementType();
+        unsigned vecSize = GEPIt->getVectorNumElements();
+
         // Load the whole register.
         Value *newLd = GenerateCBLoadLegacy(handle, legacyIndex,
-                                     /*channelOffset*/ 0, EltTy,
-                                     /*vecSize*/ 4, hlslOP, Builder);
+                                     /*channelOffset*/ channel, EltTy,
+                                     /*vecSize*/ vecSize, hlslOP, Builder);
         // Copy to array.
         IRBuilder<> AllocaBuilder(GEP->getParent()->getParent()->getEntryBlock().getFirstInsertionPt());
-        Value *tempArray = AllocaBuilder.CreateAlloca(ArrayType::get(EltTy, 4));
+        Value *tempArray = AllocaBuilder.CreateAlloca(ArrayType::get(EltTy, vecSize));
         Value *zeroIdx = hlslOP->GetU32Const(0);
-        for (unsigned i = 0; i < 4; i++) {
+        for (unsigned i = 0; i < vecSize; i++) {
           Value *Elt = Builder.CreateExtractElement(newLd, i);
           Value *EltGEP = Builder.CreateInBoundsGEP(tempArray, {zeroIdx, hlslOP->GetU32Const(i)});
           Builder.CreateStore(Elt, EltGEP);

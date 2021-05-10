@@ -764,6 +764,7 @@ public:
       pBindInfo->UpperBound = R->GetUpperBound();
       if (pBindInfo1) {
         pBindInfo1->ResKind = (UINT)R->GetKind();
+        pBindInfo1->ResFlags |= R->HasAtomic64Use()? (UINT)PSVResourceFlag::UsedByAtomic64 : 0;
       }
       uResIndex++;
     }
@@ -1110,7 +1111,18 @@ private:
           info.minMinor = minor;
         }
         info.mask &= mask;
+      } else if (const llvm::LoadInst *LI = dyn_cast<LoadInst>(user)) {
+        // If loading a groupshared variable, limit to CS/AS/MS
+#define SFLAG(stage) ((unsigned)1 << (unsigned)DXIL::ShaderKind::stage)
+        if (LI->getPointerAddressSpace() == DXIL::kTGSMAddrSpace) {
+          const llvm::Function *F = cast<const llvm::Function>(CI->getParent()->getParent());
+          ShaderCompatInfo &info = m_FuncToShaderCompat[F];
+          info.mask &= (SFLAG(Compute) | SFLAG(Mesh) | SFLAG(Amplification));
+        }
+#undef SFLAG
+
       }
+
     }
   }
 
@@ -1167,6 +1179,8 @@ private:
         info.Flags |= static_cast<uint32_t>(DxilResourceFlag::UAVGloballyCoherent);
       if (pRes->IsROV())
         info.Flags |= static_cast<uint32_t>(DxilResourceFlag::UAVRasterizerOrderedView);
+      if (pRes->HasAtomic64Use())
+        info.Flags |= static_cast<uint32_t>(DxilResourceFlag::Atomics64Use);
       // TODO: add dynamic index flag
     }
     m_pResourceTable->Insert(info);
@@ -1517,15 +1531,10 @@ DxilContainerWriter *hlsl::NewDxilContainerWriter() {
   return new DxilContainerWriter_impl();
 }
 
-static bool HasDebugInfo(const Module &M) {
-  for (Module::const_named_metadata_iterator NMI = M.named_metadata_begin(),
-                                             NME = M.named_metadata_end();
-       NMI != NME; ++NMI) {
-    if (NMI->getName().startswith("llvm.dbg.")) {
-      return true;
-    }
-  }
-  return false;
+static bool HasDebugInfoOrLineNumbers(const Module &M) {
+  return
+    llvm::getDebugMetadataVersionFromModule(M) != 0 ||
+    llvm::hasDebugInfo(M);
 }
 
 static void GetPaddedProgramPartSize(AbstractMemoryStream *pStream,
@@ -1762,8 +1771,7 @@ void hlsl::SerializeDxilContainerForModule(DxilModule *pModule,
   // If we have debug information present, serialize it to a debug part, then use the stripped version as the canonical program version.
   CComPtr<AbstractMemoryStream> pProgramStream = pInputProgramStream;
   bool bModuleStripped = false;
-  bool bHasDebugInfo = HasDebugInfo(*pModule->GetModule());
-  if (bHasDebugInfo) {
+  if (HasDebugInfoOrLineNumbers(*pModule->GetModule())) {
     uint32_t debugInUInt32, debugPaddingBytes;
     GetPaddedProgramPartSize(pInputProgramStream, debugInUInt32, debugPaddingBytes);
     if (Flags & SerializeDxilFlags::IncludeDebugInfoPart) {
